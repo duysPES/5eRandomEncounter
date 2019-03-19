@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import numpy as np
-import configparser, csv, sys, argparse
+import configparser, csv, sys, argparse, random
 
 class Monster(object):
     def __init__(self, minfo, header):
@@ -83,11 +83,23 @@ class MonsterStorage(object):
         50000,
         62000,
         75000   # CR 25
+        
         ]
         
-    
+    def monstersBelowXP(self, pthreshold):
+        ms = []
+        for m in self.Monsters:
+            if self.CRtoXP(m) <= pthreshold:
+                ms.append(m)
+        
+        return ms
+        
+        
     def CRtoXP(self, cr_decimal):
-        cr = float(cr_decimal)
+        try:
+            cr = float(cr_decimal)
+        except:
+            cr = 0
         if cr == 0:
             return 10.0
         elif cr == 0.25:
@@ -96,7 +108,24 @@ class MonsterStorage(object):
             return 100
         else:
             return self.Cr2XP[int(cr)]
-        
+            
+    def CRtoXP(self, monster):
+        try:
+            cr = float(monster.Info['CR (Decimal)'])
+        except:
+            cr = float(eval(monster.Info['CR']))
+            
+        if cr == 0:
+            return 10.0
+        elif cr == 0.25:
+            return 50
+        elif cr == 0.50:
+            return 100
+        else:
+            try:
+                return self.Cr2XP[int(cr)]
+            except:
+                return self.Cr2XP[-1]
         
 
 class PlayerStorage(object):
@@ -153,7 +182,26 @@ class PlayerStorage(object):
         return self.players.sections()
 
 
+def EncounterMulti(nmonsters):
+    m = nmonsters
+    if m ==1:
+        return 1.0
+    if m == 2:
+        return 1.5
+    if m >= 3 or m <=6:
+        return 2.0
+    if m >=7 or m <= 10:
+        return 2.5
+    if m >= 11 or m <= 14:
+        return 3.0
+    
+    return 4.0
 
+
+def isclose(a, b, rel_tol=0.1, abs_tol=0.0):
+    return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
+    
+    
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description="Build Random Encounters for DND 5e", prog=sys.argv[0])
@@ -162,13 +210,48 @@ if __name__ == '__main__':
     parser.add_argument('-D', choices=[0,1,2,3], type=int, help="Difficulty of the encounter")
     parser.add_argument('-N', help='Number of monsters wanted in encounter', type=int)
     args = vars(parser.parse_args())
+    
     monsters = MonsterStorage(args['mfile'])
     players = PlayerStorage(args['pfile'])
+    num_of_monsters = args['N']
+    difficulty = args['D']
     
-    print(players.PartyXpThreshold(0))
-    monster = monsters.Storage[34]
-    print(monster[0], monsters.CRtoXP(monster[11]))
-    print(monsters.Monsters[0].Info)
-    print(monsters.Monsters[0].Info['CR (Decimal)'],
-            monsters.CRtoXP(monsters.Monsters[0].Info['CR (Decimal)']))
+    players_threshold = players.PartyXpThreshold(difficulty)
+    appropriate_monsters = monsters.monstersBelowXP(players_threshold)
+    
+    found_match = False
+    rmonsters = []
+    monsters_threshold = 0
+    
+    while(not found_match):
+        
+        for i in range(0,num_of_monsters):
+            rmon = random.choice(appropriate_monsters)
+            monsters_threshold += monsters.CRtoXP(rmon)
+            rmonsters.append(rmon)
+            
+        monsters_threshold *= EncounterMulti(num_of_monsters)
+        thres = abs(monsters_threshold - players_threshold)
+        #print thres
+        if not isclose(monsters_threshold, players_threshold):
+            rmonsters = []
+            monsters_threshold = 0
+            continue
+        
+        found_match = True
+        
+        print("\nPlayers threshold: %s\t Monsters Threshold: %s\t Abs: %s\n" % (players_threshold, monsters_threshold, thres))
+    
+    for m in rmonsters:
+        print("Monster: [%30s]\tCR: [%3s]\t XP: [%10s]\tBook: [%30s/%3s]" % (m.Info['Name'], m.Info["CR"], monsters.CRtoXP(m), m.Info['Book'], m.Info['Page']))   
+            
+        
+        
+        
+        
+        
+        
+    
+    
+    
   
